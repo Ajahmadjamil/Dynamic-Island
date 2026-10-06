@@ -1,0 +1,13 @@
+<resources>
+    <string name="app_name">Islet</string>
+
+    <string name="accessibility_service_label">Islet overlay</string>
+    <!-- Shown by the system on the Accessibility settings page; Play Store reviewers read this. -->
+    <string name="accessibility_service_description">Islet uses the Accessibility API only to draw a small interactive pill over the camera cutout, above the status bar, where normal apps cannot draw. It shows music, timers, calls and other live activities you choose. Islet does not read screen content, observe what you type, or perform actions on your behalf, and no data leaves your device.</string>
+    <string name="notification_listener_label">Islet live activities</string>
+
+    <string name="fallback_channel_name">Island overlay</string>
+    <string name="fallback_channel_desc">Keeps the island running when the accessibility service is off.</string>
+    <string name="fallback_notification_title">Island is running</string>
+    <string name="fallback_notification_text">Enable the accessibility service for the best experience.</string>
+</resources>

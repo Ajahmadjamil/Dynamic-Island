@@ -1,0 +1,8 @@
+<resources>
+    <!-- Window-level theme only; Compose draws everything (Material 3, dynamic color). -->
+    <style name="Theme.Islet" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>
