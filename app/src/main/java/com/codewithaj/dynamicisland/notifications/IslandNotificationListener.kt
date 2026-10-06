@@ -1,10 +1,12 @@
 package com.codewithaj.dynamicisland.notifications
 
+import android.app.NotificationManager
 import android.content.ComponentName
 import android.os.SystemClock
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.codewithaj.dynamicisland.ServiceLocator
+import com.codewithaj.dynamicisland.data.PopUpChannel
 import com.codewithaj.dynamicisland.island.IslandActivity
 import com.codewithaj.dynamicisland.island.IslandStateManager
 import com.codewithaj.dynamicisland.service.IslandAccessibilityService
@@ -84,11 +86,37 @@ class IslandNotificationListener : NotificationListenerService() {
         val ranking = rankingMap?.let { map -> Ranking().takeIf { map.getRanking(sbn.key, it) } }
         val settings = ServiceLocator.settingsState.value
         if (!parser.shouldShow(sbn, ranking, settings, IslandAccessibilityService.foregroundPackage.value)) return
+        // This app is allowed on the island → Islet's card replaces the system banner. Done
+        // first, before any icon work. (Apps not allowed on the island never get here and keep
+        // their normal pop-up.) Only needed when Android will pop this one up too.
+        val popsNatively = ranking != null && ranking.importance >= NotificationManager.IMPORTANCE_HIGH
+        if (popsNatively) HeadsUpSuppressor.replaceSystemBanner(this)
+        trackPopUpChannel(sbn, ranking, popsNatively)
         val s = scope ?: return
         s.launch {
             // Icon decoding/scaling off the main thread.
             val preview = withContext(Dispatchers.Default) { parser.build(sbn) } ?: return@launch
             ServiceLocator.islandState.showAlert(preview, IslandStateManager.ALERT_NOTIFICATION_MS)
+        }
+    }
+
+    /**
+     * Remembers which notification channels of island-allowed apps still pop up natively
+     * ("Pop on screen" on), so Settings can offer a one-tap fix that removes the double banner
+     * for good. A channel leaves the list once it arrives without popping up.
+     */
+    private fun trackPopUpChannel(sbn: StatusBarNotification, ranking: Ranking?, popsNatively: Boolean) {
+        val channel = ranking?.channel ?: return
+        val prefix = PopUpChannel.prefix(sbn.packageName, channel.id)
+        val current = ServiceLocator.settingsState.value.popUpChannels
+        val listed = current.any { it.startsWith(prefix) }
+        if (popsNatively == listed) return
+        val entry = PopUpChannel.encode(sbn.packageName, channel.id, channel.name?.toString().orEmpty())
+        ServiceLocator.appScope.launch {
+            ServiceLocator.settings.update { st ->
+                val without = st.popUpChannels.filterNot { it.startsWith(prefix) }.toSet()
+                st.copy(popUpChannels = if (popsNatively) without + entry else without)
+            }
         }
     }
 

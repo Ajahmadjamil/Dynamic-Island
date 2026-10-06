@@ -24,6 +24,8 @@ import androidx.dynamicanimation.animation.SpringForce
 import com.codewithaj.dynamicisland.island.animation.AnimationSpec
 import com.codewithaj.dynamicisland.island.shader.GooShader
 import kotlin.math.abs
+import kotlin.math.ceil
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 /** Where the split bubble (second activity) should be, in screen coordinates (px). */
@@ -155,6 +157,8 @@ class IslandView(context: Context) : View(context) {
         val alphaAnim = spring({ alpha }, { alpha = it }, DynamicAnimation.MIN_VISIBLE_CHANGE_ALPHA).apply {
             addEndListener { _, _, value, _ ->
                 if (value <= 0.001f && this@Slot !== current) { renderer = null; data = null; key = null }
+                // Content fade finished: draw once more so the ambient tick re-arms (see onDraw).
+                invalidate()
             }
         }
         val scaleAnim = spring({ scale }, { scale = it }, DynamicAnimation.MIN_VISIBLE_CHANGE_SCALE)
@@ -165,6 +169,9 @@ class IslandView(context: Context) : View(context) {
     private val slotB = Slot("islandContentB")
     private var current = slotA
     private val other get() = if (current === slotA) slotB else slotA
+
+    /** Ambient redraw tick (equaliser, clocks); re-armed, never stacked. See onDraw. */
+    private val ambientTick = Runnable { invalidate() }
 
     private val fadeInRunnable = Runnable {
         val s = current
@@ -410,10 +417,14 @@ class IslandView(context: Context) : View(context) {
         val r = current.renderer
         if (r != null && current.alpha > 0f && visibility == VISIBLE) {
             if (isAnimating() || current.alphaAnim.isRunning) return // springs already redraw every frame
+            // ONE pending tick at a time. Every draw (including extra ones from data updates or
+            // touches) re-arms the same Runnable instead of posting another, otherwise each extra
+            // draw would start a parallel chain and 30 fps would creep up to 60, 1 Hz clocks to more.
+            removeCallbacks(ambientTick)
             if (r.wantsFullFrameRate(current.data)) {
-                postInvalidateOnAnimation()
+                postInvalidateOnAnimation() // coalesces into the next vsync; no chains
             } else if (r.animatesContinuously(current.presentation, current.data)) {
-                postInvalidateDelayed(r.ambientFrameMs(current.presentation, current.data))
+                postDelayed(ambientTick, r.ambientFrameMs(current.presentation, current.data))
             }
         }
     }
@@ -428,10 +439,16 @@ class IslandView(context: Context) : View(context) {
         val level = ((1f - slot.alpha) * AnimationSpec.BLUR_LEVELS).roundToInt()
         val node = slot.node
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && node != null && level > 0 && canvas.isHardwareAccelerated) {
-            // Record into a RenderNode so a blur can be applied to the content alone.
-            node.setPosition(0, 0, width, height)
+            // Record into a RenderNode so a blur can be applied to the content alone. The node
+            // (and so the offscreen layer the blur renders into) is only as big as the content
+            // plus the blur radius — not the whole window — which keeps GPU memory small.
+            val pad = AnimationSpec.CONTENT_MAX_BLUR_DP * density * 2f
+            val l = floor(slotRect.left - pad).toInt()
+            val t = floor(slotRect.top - pad).toInt()
+            node.setPosition(l, t, ceil(slotRect.right + pad).toInt(), ceil(slotRect.bottom + pad).toInt())
             node.setRenderEffect(blurEffects[level])
             val rc = node.beginRecording()
+            rc.translate(-l.toFloat(), -t.toFloat()) // node-local → view coordinates
             rc.scale(slot.scale, slot.scale, cx, cy)
             renderer.draw(rc, slotRect, slot.presentation, alpha, now, slot.data)
             node.endRecording()
@@ -588,6 +605,7 @@ class IslandView(context: Context) : View(context) {
 
     override fun onDetachedFromWindow() {
         removeCallbacks(fadeInRunnable)
+        removeCallbacks(ambientTick)
         for (a in shapeAnims) a.cancel()
         for (a in bubbleAnims) a.cancel()
         pressAnim.cancel()
@@ -620,7 +638,12 @@ class IslandView(context: Context) : View(context) {
     }
 
     private fun checkSettled() {
-        if (!isAnimating()) listener?.onSettled()
+        if (!isAnimating()) {
+            // One more draw after the last spring frame, so ambient ticking re-arms itself
+            // (frames drawn while springs ran deliberately don't arm it).
+            invalidate()
+            listener?.onSettled()
+        }
     }
 
     private companion object {

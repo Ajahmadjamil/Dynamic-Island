@@ -39,6 +39,11 @@ data class IslandSettings(
      * WRITE_SECURE_SETTINGS, granted once via adb). See notifications/HeadsUpSuppressor.
      */
     val replaceSystemHeadsUp: Boolean = false,
+    /**
+     * Channels of island-allowed apps that still pop up natively ([PopUpChannel] entries),
+     * shown in Settings with a one-tap "turn off pop-up" fix.
+     */
+    val popUpChannels: Set<String> = emptySet(),
 
     // ---- Per-app filter (applies to notification previews and app-owned live activities) ----
     val appFilterMode: AppFilterMode = AppFilterMode.ALL_EXCEPT_BLOCKED,
@@ -62,6 +67,22 @@ data class Calibration(
     /** [IslandSettings.AUTO] = fully rounded ends (height / 2). */
     val cornerRadiusDp: Float = IslandSettings.AUTO,
 )
+
+/** "package · channel id · channel name" stored as one string in a DataStore string set. */
+object PopUpChannel {
+    private const val SEP = '\u001F' // unit separator: never appears in package/channel ids
+
+    data class Entry(val packageName: String, val channelId: String, val channelName: String)
+
+    fun prefix(packageName: String, channelId: String) = "$packageName$SEP$channelId$SEP"
+    fun encode(packageName: String, channelId: String, channelName: String) =
+        prefix(packageName, channelId) + channelName
+
+    fun decode(s: String): Entry? {
+        val parts = s.split(SEP)
+        return if (parts.size == 3) Entry(parts[0], parts[1], parts[2]) else null
+    }
+}
 
 /** How [IslandSettings.appFilterPackages] is interpreted. */
 enum class AppFilterMode {

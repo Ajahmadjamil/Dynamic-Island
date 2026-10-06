@@ -16,6 +16,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.codewithaj.dynamicisland.data.AppFilterMode
+import com.codewithaj.dynamicisland.data.PopUpChannel
+import com.codewithaj.dynamicisland.util.startFirstResolvable
+import android.provider.Settings
 import com.codewithaj.dynamicisland.util.AdbCommands
 import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -191,8 +194,8 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
                     SwitchRow(
                         "Replace system pop-ups",
                         subtitle = when {
-                            !status.secureSettings -> "Hide Android's own banners so only the island shows. Needs a one-time setup from a computer."
-                            else -> "Android's pop-up banners are off while Islet shows previews. Blocked apps won't pop up at all; everything still goes to the shade."
+                            !status.secureSettings -> "Show only Islet's card for apps you allow, and Android's normal pop-up for the rest. Needs a one-time setup from a computer."
+                            else -> "Apps allowed in \"Choose apps\" show only Islet's card; all other apps keep Android's normal pop-up. Everything still goes to the notification shade."
                         },
                         checked = settings.replaceSystemHeadsUp && status.secureSettings,
                         enabled = settings.notificationPreviews,
@@ -211,6 +214,10 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
                         },
                     ) { navigate(Screen.AppFilter) }
                 }
+            }
+
+            if (settings.notificationPreviews && settings.popUpChannels.isNotEmpty()) {
+                item { DoublePopUpsCard(settings.popUpChannels) }
             }
 
             item { SectionTitle("Animation speed") }
@@ -264,6 +271,52 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
 }
 
 /**
+ * Chat types (notification channels) of island-allowed apps that Android still pops up itself.
+ * Turning off "Pop on screen" for them is the only *guaranteed* way to see one banner (Islet's)
+ * instead of two; Android only lets the user change that, so we deep-link straight to it.
+ */
+@Composable
+private fun DoublePopUpsCard(entries: Set<String>) {
+    val context = LocalContext.current
+    val pm = context.packageManager
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.tertiaryContainer),
+        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+    ) {
+        Column(Modifier.padding(16.dp)) {
+            Text("Double pop-ups", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Android still shows its own pop-up for these, on top of Islet's card. Tap Fix and turn off " +
+                    "\"Pop on screen\" — the notifications still arrive and still show on the island.",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp, bottom = 6.dp),
+            )
+            entries.mapNotNull { PopUpChannel.decode(it) }.sortedBy { it.packageName }.forEach { e ->
+                val app = try {
+                    pm.getApplicationLabel(pm.getApplicationInfo(e.packageName, 0)).toString()
+                } catch (_: Exception) { e.packageName }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        if (e.channelName.isNotEmpty()) "$app · ${e.channelName}" else app,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = {
+                        context.startFirstResolvable(
+                            Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, e.packageName)
+                                .putExtra(Settings.EXTRA_CHANNEL_ID, e.channelId),
+                            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                                .putExtra(Settings.EXTRA_APP_PACKAGE, e.packageName),
+                        )
+                    }) { Text("Fix") }
+                }
+            }
+        }
+    }
+}
+
+/**
  * WRITE_SECURE_SETTINGS can't be requested at runtime; only adb can grant it. We show the
  * exact command, and how to undo everything.
  */
@@ -277,9 +330,10 @@ private fun HeadsUpSetupDialog(onDismiss: () -> Unit, onDone: () -> Unit) {
         text = {
             Column {
                 Text(
-                    "Android doesn't let apps turn off another app's pop-ups. Islet can switch off the " +
-                        "system's pop-up banners instead (and switches them back on whenever previews or " +
-                        "the island are off), but it needs a permission only a computer can grant.\n\n" +
+                    "Android doesn't let apps turn off another app's pop-ups directly. When Islet shows its " +
+                        "card for an app you allowed, it briefly switches the system's pop-ups off (Android " +
+                        "then removes that banner) and straight back on, so other apps keep popping up " +
+                        "normally. This needs a permission only a computer can grant.\n\n" +
                         "1. Connect your phone with USB debugging on.\n2. Run:",
                     style = MaterialTheme.typography.bodyMedium,
                 )

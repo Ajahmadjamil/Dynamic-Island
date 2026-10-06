@@ -85,6 +85,7 @@ class SettingsRepository(context: Context) {
             alertConnectivity = this[K.alertConnectivity] ?: d.alertConnectivity,
             notificationPreviews = this[K.previews] ?: d.notificationPreviews,
             replaceSystemHeadsUp = this[K.replaceHeadsUp] ?: d.replaceSystemHeadsUp,
+            popUpChannels = this[K.popUpChannels] ?: d.popUpChannels,
             appFilterMode = this[K.filterMode]
                 ?.let { name -> AppFilterMode.entries.firstOrNull { it.name == name } }
                 ?: d.appFilterMode,
@@ -116,6 +117,7 @@ class SettingsRepository(context: Context) {
         this[K.alertConnectivity] = s.alertConnectivity
         this[K.previews] = s.notificationPreviews
         this[K.replaceHeadsUp] = s.replaceSystemHeadsUp
+        this[K.popUpChannels] = s.popUpChannels
         this[K.filterMode] = s.appFilterMode.name
         this[K.filterPackages] = s.appFilterPackages
     }
@@ -144,6 +146,7 @@ class SettingsRepository(context: Context) {
         val alertConnectivity = booleanPreferencesKey("alert_connectivity")
         val previews = booleanPreferencesKey("notification_previews")
         val replaceHeadsUp = booleanPreferencesKey("replace_system_heads_up")
+        val popUpChannels = stringSetPreferencesKey("pop_up_channels")
         val filterMode = stringPreferencesKey("app_filter_mode")
         val filterPackages = stringSetPreferencesKey("app_filter_packages")
     }

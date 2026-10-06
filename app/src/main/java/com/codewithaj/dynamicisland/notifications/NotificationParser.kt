@@ -24,7 +24,9 @@ import com.codewithaj.dynamicisland.island.IslandActivity
  *  - media, calls, progress, navigation, alarms, system → skip (handled by live activities
  *    or not interesting as a banner)
  *  - silent (importance < DEFAULT) or hidden by Do Not Disturb → skip
- *  - updates of an already-shown notification with "only alert once" → skip
+ *  - re-posts with the SAME content (time, title, text, message count) → skip. Chat apps
+ *    (WhatsApp, Instagram…) *update one notification per chat* for every new message, so the
+ *    notification key repeats; only the content tells a new message from a silent refresh.
  *  - nothing to show (no title and no text) → skip
  * On the lock screen, private notifications show only the app name (like the system does).
  */
@@ -34,9 +36,9 @@ class NotificationParser(private val context: Context) {
     private val keyguard = context.getSystemService(KeyguardManager::class.java)
     private val iconPx = (48 * context.resources.displayMetrics.density).toInt()
 
-    /** key → last time we showed it; small LRU to drop rapid re-posts. */
-    private val recent = object : LinkedHashMap<String, Long>(32, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Long>?) = size > 64
+    /** key → content signature last shown; small LRU so silent refreshes don't re-announce. */
+    private val recent = object : LinkedHashMap<String, Int>(32, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>?) = size > 64
     }
 
     /** Cheap checks only; runs on the listener's thread for every notification. */
@@ -64,13 +66,21 @@ class NotificationParser(private val context: Context) {
             if (!ranking.matchesInterruptionFilter()) return false // Do Not Disturb
         }
 
-        val now = SystemClock.uptimeMillis()
-        val last = recent[sbn.key]
-        if (last != null && (n.flags and Notification.FLAG_ONLY_ALERT_ONCE != 0 || now - last < REPOST_WINDOW_MS)) {
-            return false
-        }
-        recent[sbn.key] = now
+        val sig = contentSignature(n)
+        if (recent[sbn.key] == sig) return false // same content re-posted (read receipt, refresh…)
+        recent[sbn.key] = sig
         return true
+    }
+
+    /** Changes whenever the notification carries a new message; stable across silent refreshes. */
+    private fun contentSignature(n: Notification): Int {
+        val e = n.extras
+        var h = n.`when`.hashCode()
+        h = 31 * h + (e.getCharSequence(Notification.EXTRA_TITLE)?.toString()?.hashCode() ?: 0)
+        h = 31 * h + (e.getCharSequence(Notification.EXTRA_TEXT)?.toString()?.hashCode() ?: 0)
+        @Suppress("DEPRECATION")
+        h = 31 * h + (e.getParcelableArray(Notification.EXTRA_MESSAGES)?.size ?: 0)
+        return h
     }
 
     /** Builds the preview; loads and scales icons, so call it off the main thread. */
@@ -137,7 +147,6 @@ class NotificationParser(private val context: Context) {
     } catch (_: Exception) { null }
 
     private companion object {
-        const val REPOST_WINDOW_MS = 4_000L
         val SKIPPED_CATEGORIES = setOf(
             Notification.CATEGORY_TRANSPORT, // media
             Notification.CATEGORY_CALL,      // Phase 5: call activity
