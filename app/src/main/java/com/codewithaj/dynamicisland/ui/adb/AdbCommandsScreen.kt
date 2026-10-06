@@ -42,8 +42,15 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.codewithaj.dynamicisland.ui.components.IsletTopBar
-import com.codewithaj.dynamicisland.ui.components.SectionTitle
-import com.codewithaj.dynamicisland.ui.components.rememberPermissionStatus
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.codewithaj.dynamicisland.util.PermissionUtils
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import com.codewithaj.dynamicisland.ui.theme.SuccessGreen
 import com.codewithaj.dynamicisland.util.AdbCommands
 
@@ -55,11 +62,23 @@ import com.codewithaj.dynamicisland.util.AdbCommands
 @Composable
 fun AdbCommandsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
-    val status = rememberPermissionStatus()
-    val items = AdbCommands.items(context, status)
-    val required = items.filter { it.level == AdbCommands.Level.REQUIRED }
+    // Commands are usually run while this screen is open, so there's no resume to trigger a
+    // refresh: re-check every 1.5 s while visible (UI process only; stops when you leave).
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf(PermissionUtils.status(context)) }
+    LifecycleResumeEffect(Unit) {
+        val job = scope.launch {
+            while (true) {
+                status = PermissionUtils.status(context)
+                delay(1_500)
+            }
+        }
+        onPauseOrDispose { job.cancel() }
+    }
+    // Only the must-have commands; optional ones live next to their features in Settings.
+    val required = AdbCommands.items(context, status).filter { it.level == AdbCommands.Level.REQUIRED }
     val requiredDone = required.count { it.done }
-    val missing = items.filter { !it.done && it.level != AdbCommands.Level.RECOVERY }
+    val missing = required.filter { !it.done }
     val scroll = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
@@ -84,26 +103,12 @@ fun AdbCommandsScreen(onBack: () -> Unit) {
                 Text(
                     "Run these on a computer with the phone connected and USB debugging on " +
                         "(Settings → System → Developer options). Each command is safe to run again. " +
-                        "Status refreshes when you come back to this screen.",
+                        "The ticks update live while this screen is open.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            AdbCommands.Level.entries.forEach { level ->
-                val group = items.filter { it.level == level }
-                if (group.isEmpty()) return@forEach
-                item(key = "title_$level") {
-                    SectionTitle(
-                        when (level) {
-                            AdbCommands.Level.REQUIRED -> "Required"
-                            AdbCommands.Level.RECOMMENDED -> "Recommended"
-                            AdbCommands.Level.OPTIONAL -> "Optional"
-                            AdbCommands.Level.RECOVERY -> "Recovery"
-                        },
-                    )
-                }
-                items(group, key = { it.id }) { item -> CommandCard(item) }
-            }
+            items(required, key = { it.id }) { item -> CommandCard(item) }
         }
     }
 }

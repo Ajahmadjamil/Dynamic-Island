@@ -57,12 +57,11 @@ object AdbCommands {
         list += Item(
             id = "accessibility",
             title = "Accessibility service",
-            why = "Draws the island above the status bar around the camera, so you can tap it. Islet reads no screen content.",
-            // Appends to the existing list instead of replacing it (keeps TalkBack etc. enabled).
-            command = "adb shell 'S=$a11y; C=\$(settings get secure enabled_accessibility_services); " +
-                "case \"\$C\" in *\"\$S\"*) ;; null|\"\") settings put secure enabled_accessibility_services \"\$S\";; " +
-                "*) settings put secure enabled_accessibility_services \"\$C:\$S\";; esac; " +
-                "settings put secure accessibility_enabled 1'",
+            why = "Draws the island above the status bar around the camera, so you can tap it. Islet reads no screen content. " +
+                "Note: this replaces any other enabled accessibility service (e.g. TalkBack); use the Settings switch if you rely on one.",
+            // Two plain commands: they survive every shell (cmd, PowerShell, bash) without quoting.
+            command = "adb shell settings put secure enabled_accessibility_services $a11y\n" +
+                "adb shell settings put secure accessibility_enabled 1",
             level = Level.REQUIRED,
             done = s.accessibility,
             statusText = if (s.accessibility) "On" else "Off",

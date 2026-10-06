@@ -40,6 +40,7 @@ fun OnboardingScreen(
     showBack: Boolean,
     onBack: () -> Unit,
     onOemGuide: () -> Unit,
+    onAdb: () -> Unit,
     onFinish: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -79,6 +80,9 @@ fun OnboardingScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                TextButton(onClick = onAdb, modifier = Modifier.padding(top = 4.dp)) {
+                    Text("Have a computer? Set everything up with ADB commands")
+                }
             }
             item {
                 PermissionCard(

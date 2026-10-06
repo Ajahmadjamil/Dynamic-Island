@@ -55,4 +55,16 @@ object AnimationSpec {
 
     /** Extra room around the shape while a spring may overshoot, as a fraction of its size. */
     const val OVERSHOOT_ROOM = 0.08f
+
+    // ---- Split bubble (two activities) ------------------------------------------------------
+    // The bubble "pinches off" the pill's right end: it starts inside the pill, small, and
+    // springs outward with a little more bounce than the pill, so the gooey bridge stretches,
+    // thins and snaps. Merging runs the same path in reverse with a firmer spring.
+
+    val BUBBLE_SPLIT = Spring(stiffness = 260f, dampingRatio = 0.62f)
+    val BUBBLE_MERGE = Spring(stiffness = 520f, dampingRatio = 0.9f)
+    /** Gap between pill and bubble when fully split (iOS ≈ 6pt). */
+    const val BUBBLE_GAP_DP = 6f
+    /** Smooth-min blend radius of the gooey shader: how far the "goo" reaches between shapes. */
+    const val GOO_BLEND_DP = 11f
 }

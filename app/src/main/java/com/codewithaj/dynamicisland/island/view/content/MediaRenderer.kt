@@ -101,6 +101,14 @@ class MediaRenderer(
 
     override fun expandedHeightPx(density: Float) = 196f * density
 
+    /** Split bubble: round album art (or the note placeholder). */
+    override fun drawMini(canvas: Canvas, circle: RectF, alpha: Float, nowMs: Long, data: Any?) {
+        val info = (data as? IslandActivity.Media)?.info ?: return
+        r.set(circle)
+        r.inset(circle.width() * 0.16f, circle.height() * 0.16f)
+        drawArt(canvas, r, r.width() / 2f, info, (alpha * 255).toInt().coerceIn(0, 255))
+    }
+
     override fun animatesContinuously(presentation: Presentation, data: Any?): Boolean =
         (data as? IslandActivity.Media)?.info?.playing == true
 

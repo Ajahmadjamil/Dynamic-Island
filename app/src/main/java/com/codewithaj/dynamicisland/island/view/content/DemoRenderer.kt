@@ -50,6 +50,13 @@ class DemoRenderer(private val density: Float) : IslandContentRenderer {
 
     override fun animatesContinuously(presentation: Presentation, data: Any?) = true
 
+    override fun drawMini(canvas: Canvas, circle: RectF, alpha: Float, nowMs: Long, data: Any?) {
+        val demo = data as? IslandActivity.Demo ?: return
+        fill.color = if (demo.variant == Variant.MUSIC) accentMusic else accentTimer
+        fill.alpha = (alpha * 255).toInt()
+        canvas.drawCircle(circle.centerX(), circle.centerY(), circle.width() * 0.3f, fill)
+    }
+
     override fun draw(canvas: Canvas, layout: RectF, presentation: Presentation, alpha: Float, nowMs: Long, data: Any?) {
         val demo = data as? IslandActivity.Demo ?: return
         startedAtMs = demo.startedAtMs

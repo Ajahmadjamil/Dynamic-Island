@@ -65,6 +65,8 @@ object PermissionUtils {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
         val ops = context.getSystemService(AppOpsManager::class.java) ?: return null
         return try {
+            // Deprecated in newer SDKs but still the simplest read-only check of our own op.
+            @Suppress("DEPRECATION")
             ops.unsafeCheckOpNoThrow("android:access_restricted_settings", Process.myUid(), context.packageName) ==
                 AppOpsManager.MODE_ALLOWED
         } catch (_: Exception) {

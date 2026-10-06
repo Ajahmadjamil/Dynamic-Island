@@ -39,7 +39,29 @@ interface IslandContentRenderer {
      * vsync instead of the ~30 fps ambient rate. Must turn false once the animation is done.
      */
     fun wantsFullFrameRate(data: Any?): Boolean = false
+
+    /**
+     * Delay until the next ambient redraw while [animatesContinuously]. Text clocks (timers,
+     * call duration) return the time to the next second boundary, so they redraw once per
+     * second instead of 30 times.
+     */
+    fun ambientFrameMs(presentation: Presentation, data: Any?): Long =
+        com.codewithaj.dynamicisland.island.animation.AnimationSpec.AMBIENT_FRAME_MS
+
+    /**
+     * Icon-only rendition for the split bubble (the second activity), inside [circle]
+     * (view coords). Default: nothing, so the bubble is a plain black circle.
+     */
+    fun drawMini(canvas: Canvas, circle: RectF, alpha: Float, nowMs: Long, data: Any?) = Unit
 }
+
+/** Fires an app's PendingIntent (call answer/decline, timer pause/reset…). */
+fun interface LiveActionHandler {
+    fun onAction(intent: android.app.PendingIntent)
+}
+
+/** Milliseconds until the next wall-clock second boundary (+ a small margin). */
+fun msToNextSecond(): Long = 1_000L - (System.currentTimeMillis() % 1_000L) + 8L
 
 /**
  * Renderers with controls (buttons, seek bar) in the expanded card. The view offers every

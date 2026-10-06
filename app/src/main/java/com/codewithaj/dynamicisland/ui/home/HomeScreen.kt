@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import com.codewithaj.dynamicisland.BuildConfig
 import com.codewithaj.dynamicisland.ServiceLocator
 import com.codewithaj.dynamicisland.data.AnimationSpeed
 import com.codewithaj.dynamicisland.data.IslandSettings
@@ -132,12 +133,29 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
                 }
             }
 
-            item { SectionTitle("Live activities & alerts") }
+            item { SectionTitle("Live activities") }
             item {
                 GroupCard {
                     SwitchRow("Music", subtitle = "Now playing from any media app", checked = settings.showMedia) { v ->
                         update { it.copy(showMedia = v) }
                     }
+                    SwitchRow("Calls", subtitle = "Incoming call with answer/decline, call timer", checked = settings.showCalls) { v ->
+                        update { it.copy(showCalls = v) }
+                    }
+                    SwitchRow("Timers & stopwatch", subtitle = "From your clock app", checked = settings.showTimers) { v ->
+                        update { it.copy(showTimers = v) }
+                    }
+                    SwitchRow(
+                        "Navigation & live progress",
+                        subtitle = "Maps directions, deliveries, rides, downloads (Android 16 Live Updates)",
+                        checked = settings.showLiveUpdates,
+                    ) { v -> update { it.copy(showLiveUpdates = v) } }
+                }
+            }
+
+            item { SectionTitle("Alerts") }
+            item {
+                GroupCard {
                     SwitchRow("Charging & low battery", checked = settings.alertCharging) { v ->
                         update { it.copy(alertCharging = v) }
                     }
@@ -155,6 +173,15 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
                         }
                         update { it.copy(alertBluetooth = v) }
                     }
+                    SwitchRow("VPN & hotspot", subtitle = "When a VPN connects or the hotspot turns on/off", checked = settings.alertConnectivity) { v ->
+                        update { it.copy(alertConnectivity = v) }
+                    }
+                }
+            }
+
+            item { SectionTitle("Notifications") }
+            item {
+                GroupCard {
                     SwitchRow(
                         "Notification previews",
                         subtitle = if (status.notificationListener) "New notifications drop down from the island"
@@ -210,16 +237,26 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
                     NavRow(Icons.Outlined.Security, "Permissions & setup", "Accessibility, notifications, battery") { navigate(Screen.Onboarding) }
                     val adbItems = AdbCommands.items(context, status)
                     val requiredMissing = adbItems.count { it.level == AdbCommands.Level.REQUIRED && !it.done }
-                    val anyMissing = adbItems.count { !it.done && it.level != AdbCommands.Level.RECOVERY }
                     NavRow(
                         Icons.Outlined.Terminal,
                         "ADB commands",
-                        when {
-                            requiredMissing > 0 -> "$requiredMissing required step(s) missing"
-                            anyMissing > 0 -> "Required done · $anyMissing optional left"
-                            else -> "Everything is set up"
-                        },
+                        if (requiredMissing > 0) "$requiredMissing required step(s) missing" else "All required steps done",
                     ) { navigate(Screen.Adb) }
+                }
+            }
+
+            item { SectionTitle("About") }
+            item {
+                GroupCard {
+                    Column(Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Text("Islet ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            "Everything runs on your phone; Islet has no internet permission and sends nothing anywhere. " +
+                                "The island runs separately from these settings, which close completely when you leave.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
         }
@@ -296,6 +333,7 @@ private fun PlaygroundCard(enabled: Boolean) {
             ) {
                 FilledTonalButton(enabled = enabled, onClick = { send(IslandOverlayController.CMD_SHOW) }) { Text("Show activity") }
                 FilledTonalButton(enabled = enabled, onClick = { send(IslandOverlayController.CMD_SWITCH) }) { Text("Switch content") }
+                FilledTonalButton(enabled = enabled, onClick = { send(IslandOverlayController.CMD_SPLIT) }) { Text("Split bubble") }
                 FilledTonalButton(enabled = enabled, onClick = { send(IslandOverlayController.CMD_EXPAND) }) { Text("Expand") }
                 FilledTonalButton(enabled = enabled, onClick = { send(IslandOverlayController.CMD_COLLAPSE) }) { Text("Collapse") }
                 OutlinedButton(enabled = enabled, onClick = { send(IslandOverlayController.CMD_CLEAR) }) { Text("Clear") }

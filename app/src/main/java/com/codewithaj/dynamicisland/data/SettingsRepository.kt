@@ -76,9 +76,13 @@ class SettingsRepository(context: Context) {
                 ?.let { name -> AnimationSpeed.entries.firstOrNull { it.name == name } }
                 ?: d.animationSpeed,
             showMedia = this[K.showMedia] ?: d.showMedia,
+            showCalls = this[K.showCalls] ?: d.showCalls,
+            showTimers = this[K.showTimers] ?: d.showTimers,
+            showLiveUpdates = this[K.showLiveUpdates] ?: d.showLiveUpdates,
             alertCharging = this[K.alertCharging] ?: d.alertCharging,
             alertRinger = this[K.alertRinger] ?: d.alertRinger,
             alertBluetooth = this[K.alertBluetooth] ?: d.alertBluetooth,
+            alertConnectivity = this[K.alertConnectivity] ?: d.alertConnectivity,
             notificationPreviews = this[K.previews] ?: d.notificationPreviews,
             replaceSystemHeadsUp = this[K.replaceHeadsUp] ?: d.replaceSystemHeadsUp,
             appFilterMode = this[K.filterMode]
@@ -103,9 +107,13 @@ class SettingsRepository(context: Context) {
         this[K.radius] = s.calibration.cornerRadiusDp
         this[K.speed] = s.animationSpeed.name
         this[K.showMedia] = s.showMedia
+        this[K.showCalls] = s.showCalls
+        this[K.showTimers] = s.showTimers
+        this[K.showLiveUpdates] = s.showLiveUpdates
         this[K.alertCharging] = s.alertCharging
         this[K.alertRinger] = s.alertRinger
         this[K.alertBluetooth] = s.alertBluetooth
+        this[K.alertConnectivity] = s.alertConnectivity
         this[K.previews] = s.notificationPreviews
         this[K.replaceHeadsUp] = s.replaceSystemHeadsUp
         this[K.filterMode] = s.appFilterMode.name
@@ -127,9 +135,13 @@ class SettingsRepository(context: Context) {
         val radius = floatPreferencesKey("cal_radius")
         val speed = stringPreferencesKey("animation_speed")
         val showMedia = booleanPreferencesKey("show_media")
+        val showCalls = booleanPreferencesKey("show_calls")
+        val showTimers = booleanPreferencesKey("show_timers")
+        val showLiveUpdates = booleanPreferencesKey("show_live_updates")
         val alertCharging = booleanPreferencesKey("alert_charging")
         val alertRinger = booleanPreferencesKey("alert_ringer")
         val alertBluetooth = booleanPreferencesKey("alert_bluetooth")
+        val alertConnectivity = booleanPreferencesKey("alert_connectivity")
         val previews = booleanPreferencesKey("notification_previews")
         val replaceHeadsUp = booleanPreferencesKey("replace_system_heads_up")
         val filterMode = stringPreferencesKey("app_filter_mode")

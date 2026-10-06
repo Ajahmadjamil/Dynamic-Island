@@ -22,8 +22,12 @@ import androidx.dynamicanimation.animation.FloatPropertyCompat
 import androidx.dynamicanimation.animation.SpringAnimation
 import androidx.dynamicanimation.animation.SpringForce
 import com.codewithaj.dynamicisland.island.animation.AnimationSpec
+import com.codewithaj.dynamicisland.island.shader.GooShader
 import kotlin.math.abs
 import kotlin.math.roundToInt
+
+/** Where the split bubble (second activity) should be, in screen coordinates (px). */
+data class BubbleTarget(val centerX: Float, val centerY: Float, val radius: Float)
 
 /** Where the shape should end up, in *screen* coordinates (px). */
 data class ShapeTarget(
@@ -64,6 +68,9 @@ class IslandView(context: Context) : View(context) {
         /** -1 = swipe left, 1 = swipe right. */
         fun onSwipeHorizontal(direction: Int)
         fun onOutsideTouch()
+        /** Tap / long-press on the split bubble. */
+        fun onBubbleTap()
+        fun onBubbleLongPress()
         /** All shape springs have come to rest. */
         fun onSettled()
     }
@@ -113,6 +120,25 @@ class IslandView(context: Context) : View(context) {
     private val alphaAnim = spring({ shapeAlpha }, { shapeAlpha = it }, DynamicAnimation.MIN_VISIBLE_CHANGE_ALPHA, notifySettle = true)
     private val pressAnim = spring({ pressScale }, { pressScale = it }, DynamicAnimation.MIN_VISIBLE_CHANGE_SCALE)
     private val shapeAnims = arrayOf(centerXAnim, topAnim, widthAnim, heightAnim, radiusAnim, alphaAnim)
+
+    // ---- Split bubble (screen coords) ---------------------------------------------------------
+    private var bubbleCx = 0f
+    private var bubbleCy = 0f
+    private var bubbleR = 0f
+    private var bubbleTargetR = 0f
+    private var bubbleRenderer: IslandContentRenderer? = null
+    private var bubbleData: Any? = null
+    private val bubbleCxAnim = spring({ bubbleCx }, { bubbleCx = it }, DynamicAnimation.MIN_VISIBLE_CHANGE_PIXELS, notifySettle = true)
+    private val bubbleCyAnim = spring({ bubbleCy }, { bubbleCy = it }, DynamicAnimation.MIN_VISIBLE_CHANGE_PIXELS, notifySettle = true)
+    private val bubbleRAnim = spring({ bubbleR }, { bubbleR = it.coerceAtLeast(0f) }, DynamicAnimation.MIN_VISIBLE_CHANGE_PIXELS, notifySettle = true).apply {
+        // Fully merged back in: forget the content.
+        addEndListener { _, _, value, _ -> if (value <= 0.5f) { bubbleRenderer = null; bubbleData = null } }
+    }
+    private val bubbleAnims = arrayOf(bubbleCxAnim, bubbleCyAnim, bubbleRAnim)
+    private val goo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) GooShader() else null
+    private val gooRect = RectF()
+    private val bubbleRect = RectF()
+    private val bubbleClip = Path()
 
     // ---- Content slots -----------------------------------------------------------------------
     private inner class Slot(name: String) {
@@ -216,15 +242,59 @@ class IslandView(context: Context) : View(context) {
         if (snap) post { listener?.onSettled() }
     }
 
-    /** Current visual bounds of the shape in screen coords, including press scale. */
+    /** Current visual bounds of the shape (and bubble) in screen coords, including press scale. */
     fun visualBounds(out: RectF) {
         val w = shapeW * pressScale
         val h = shapeH * pressScale
         val cy = top + shapeH / 2f
         out.set(centerX - w / 2f, cy - h / 2f, centerX + w / 2f, cy + h / 2f)
+        if (bubbleR > 0.5f) {
+            out.union(bubbleCx - bubbleR, bubbleCy - bubbleR, bubbleCx + bubbleR, bubbleCy + bubbleR)
+        }
     }
 
-    fun isAnimating(): Boolean = shapeAnims.any { it.isRunning }
+    /**
+     * Shows the second activity as a separate bubble ([target] non-null) or merges it back
+     * into the pill (null). Splitting starts the bubble small, inside the pill's right end, and
+     * springs it out — with the gooey shader that reads as the island pinching in two.
+     */
+    fun setBubble(target: BubbleTarget?, renderer: IslandContentRenderer?, data: Any?, animate: Boolean) {
+        val pill = lastTarget
+        if (target != null) {
+            bubbleRenderer = renderer
+            bubbleData = data
+            bubbleTargetR = target.radius
+            if (!animate || !initialized) {
+                for (a in bubbleAnims) a.cancel()
+                bubbleCx = target.centerX; bubbleCy = target.centerY; bubbleR = target.radius
+            } else {
+                if (bubbleR <= 0.5f) {
+                    // Start hidden inside the pill's right end.
+                    val right = centerX + shapeW / 2f
+                    bubbleCx = right - target.radius
+                    bubbleCy = target.centerY
+                    bubbleR = target.radius * 0.35f
+                }
+                animate(bubbleCxAnim, target.centerX, AnimationSpec.BUBBLE_SPLIT)
+                animate(bubbleCyAnim, target.centerY, AnimationSpec.BUBBLE_SPLIT)
+                animate(bubbleRAnim, target.radius, AnimationSpec.BUBBLE_SPLIT)
+            }
+        } else if (bubbleR > 0.5f) {
+            if (!animate || pill == null) {
+                for (a in bubbleAnims) a.cancel()
+                bubbleR = 0f; bubbleRenderer = null; bubbleData = null
+            } else {
+                // Merge: slide into the pill's (target) right end while shrinking away.
+                val right = pill.centerX + pill.width / 2f
+                animate(bubbleCxAnim, right - bubbleR * 0.6f, AnimationSpec.BUBBLE_MERGE)
+                animate(bubbleCyAnim, pill.top + pill.height / 2f, AnimationSpec.BUBBLE_MERGE)
+                animate(bubbleRAnim, 0f, AnimationSpec.BUBBLE_MERGE)
+            }
+        }
+        invalidate()
+    }
+
+    fun isAnimating(): Boolean = shapeAnims.any { it.isRunning } || bubbleAnims.any { it.isRunning }
 
     // ---- Content --------------------------------------------------------------------------------
 
@@ -286,16 +356,51 @@ class IslandView(context: Context) : View(context) {
         if (pressScale != 1f) canvas.scale(pressScale, pressScale, cx, cy)
 
         shapeRect.set(cx - shapeW / 2f, top, cx + shapeW / 2f, top + shapeH)
-        fillPaint.alpha = (shapeAlpha * 255).roundToInt()
-        canvas.drawRoundRect(shapeRect, radius, radius, fillPaint)
+        val hasBubble = bubbleR > 0.5f
+        val bcx = bubbleCx - windowX
+        val g = goo
+        if (hasBubble && g != null && canvas.isHardwareAccelerated) {
+            // Pill + bubble as one metaball shape (see GooShader).
+            val k = AnimationSpec.GOO_BLEND_DP * density
+            g.update(
+                shapeRect.left, shapeRect.top, shapeRect.right, shapeRect.bottom, radius,
+                bcx, bubbleCy, bubbleR, k, shapeAlpha,
+            )
+            gooRect.set(shapeRect)
+            gooRect.union(bcx - bubbleR, bubbleCy - bubbleR, bcx + bubbleR, bubbleCy + bubbleR)
+            gooRect.inset(-k - 2f, -k - 2f)
+            canvas.drawRect(gooRect, g.paint)
+        } else {
+            fillPaint.alpha = (shapeAlpha * 255).roundToInt()
+            canvas.drawRoundRect(shapeRect, radius, radius, fillPaint)
+            // < API 33: a plain circle that slides out of the pill (no goo).
+            if (hasBubble) canvas.drawCircle(bcx, bubbleCy, bubbleR, fillPaint)
+        }
 
         // Content is clipped to the (animating) container shape.
+        val now = SystemClock.uptimeMillis()
+        canvas.save()
         clipPath.reset()
         clipPath.addRoundRect(shapeRect, radius, radius, Path.Direction.CW)
         canvas.clipPath(clipPath)
-        val now = SystemClock.uptimeMillis()
         drawSlot(canvas, other, cx, cy, now)
         drawSlot(canvas, current, cx, cy, now)
+        canvas.restore()
+
+        // Bubble content fades in only once the bubble has (nearly) reached full size.
+        val br = bubbleRenderer
+        if (hasBubble && br != null && bubbleTargetR > 0f) {
+            val grown = ((bubbleR / bubbleTargetR - 0.6f) / 0.4f).coerceIn(0f, 1f)
+            if (grown > 0f) {
+                bubbleRect.set(bcx - bubbleR, bubbleCy - bubbleR, bcx + bubbleR, bubbleCy + bubbleR)
+                canvas.save()
+                bubbleClip.reset()
+                bubbleClip.addCircle(bcx, bubbleCy, bubbleR, Path.Direction.CW)
+                canvas.clipPath(bubbleClip)
+                br.drawMini(canvas, bubbleRect, grown * shapeAlpha, now, bubbleData)
+                canvas.restore()
+            }
+        }
         canvas.restore()
 
         if (calibrating) drawGuide(canvas)
@@ -308,7 +413,7 @@ class IslandView(context: Context) : View(context) {
             if (r.wantsFullFrameRate(current.data)) {
                 postInvalidateOnAnimation()
             } else if (r.animatesContinuously(current.presentation, current.data)) {
-                postInvalidateDelayed(AnimationSpec.AMBIENT_FRAME_MS)
+                postInvalidateDelayed(r.ambientFrameMs(current.presentation, current.data))
             }
         }
     }
@@ -353,12 +458,12 @@ class IslandView(context: Context) : View(context) {
 
         override fun onSingleTapUp(e: MotionEvent): Boolean {
             performClick()
-            listener?.onTap()
+            if (touchOnBubble) listener?.onBubbleTap() else listener?.onTap()
             return true
         }
 
         override fun onLongPress(e: MotionEvent) {
-            listener?.onLongPress()
+            if (touchOnBubble) listener?.onBubbleLongPress() else listener?.onLongPress()
         }
 
         override fun onFling(e1: MotionEvent?, e2: MotionEvent, velocityX: Float, velocityY: Float): Boolean {
@@ -375,6 +480,8 @@ class IslandView(context: Context) : View(context) {
     private var tracking = false
     /** The current touch stream belongs to the content (a button or the seek bar). */
     private var contentTouch = false
+    /** The current touch stream started on the split bubble. */
+    private var touchOnBubble = false
 
     @SuppressLint("ClickableViewAccessibility")
     override fun onTouchEvent(event: MotionEvent): Boolean {
@@ -383,10 +490,11 @@ class IslandView(context: Context) : View(context) {
             return false
         }
         if (event.actionMasked == MotionEvent.ACTION_DOWN) {
+            touchOnBubble = shapeAlpha > 0.5f && hitBubble(event.x, event.y)
             // The window can be larger than the shape mid-transition; ignore touches off-shape.
-            tracking = shapeAlpha > 0.5f && hitShape(event.x, event.y)
-            contentTouch = tracking && offerToContent(event)
-            if (tracking && !contentTouch) animate(pressAnim, AnimationSpec.PRESS_SCALE, AnimationSpec.PRESS)
+            tracking = touchOnBubble || (shapeAlpha > 0.5f && hitShape(event.x, event.y))
+            contentTouch = tracking && !touchOnBubble && offerToContent(event)
+            if (tracking && !contentTouch && !touchOnBubble) animate(pressAnim, AnimationSpec.PRESS_SCALE, AnimationSpec.PRESS)
         }
         if (!tracking) return false
         if (contentTouch) {
@@ -415,6 +523,14 @@ class IslandView(context: Context) : View(context) {
         slotRect.set(s.layout)
         slotRect.offset(-windowX.toFloat(), 0f)
         return content.onContentTouch(event, slotRect, s.data)
+    }
+
+    private fun hitBubble(x: Float, y: Float): Boolean {
+        if (bubbleR < bubbleTargetR * 0.8f || bubbleR <= 0.5f) return false
+        val dx = x - (bubbleCx - windowX)
+        val dy = y - bubbleCy
+        val r = bubbleR + TOUCH_SLOP_DP * density
+        return dx * dx + dy * dy <= r * r
     }
 
     private fun hitShape(x: Float, y: Float): Boolean {
@@ -473,6 +589,7 @@ class IslandView(context: Context) : View(context) {
     override fun onDetachedFromWindow() {
         removeCallbacks(fadeInRunnable)
         for (a in shapeAnims) a.cancel()
+        for (a in bubbleAnims) a.cancel()
         pressAnim.cancel()
         for (s in arrayOf(slotA, slotB)) { s.alphaAnim.cancel(); s.scaleAnim.cancel() }
         super.onDetachedFromWindow()
@@ -503,7 +620,7 @@ class IslandView(context: Context) : View(context) {
     }
 
     private fun checkSettled() {
-        if (shapeAnims.none { it.isRunning }) listener?.onSettled()
+        if (!isAnimating()) listener?.onSettled()
     }
 
     private companion object {

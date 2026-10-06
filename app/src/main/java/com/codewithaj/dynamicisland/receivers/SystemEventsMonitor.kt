@@ -8,6 +8,12 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.media.AudioManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
+import android.os.Handler
+import android.os.Looper
 import android.os.BatteryManager
 import android.os.Build
 import android.os.SystemClock
@@ -47,6 +53,13 @@ class SystemEventsMonitor(
                 }
                 BluetoothDevice.ACTION_ACL_CONNECTED -> if (s.alertBluetooth) onBluetoothConnected(intent)
                 ACTION_BT_BATTERY_LEVEL_CHANGED -> onBluetoothBattery(intent)
+                ACTION_WIFI_AP_STATE_CHANGED -> {
+                    if (isInitialStickyBroadcast) return
+                    when (intent.getIntExtra(EXTRA_WIFI_AP_STATE, -1)) {
+                        WIFI_AP_STATE_ENABLED -> if (s.alertConnectivity) connectivityAlert(IslandActivity.Connectivity.Kind.HOTSPOT, on = true)
+                        WIFI_AP_STATE_DISABLED -> if (s.alertConnectivity) connectivityAlert(IslandActivity.Connectivity.Kind.HOTSPOT, on = false)
+                    }
+                }
                 Intent.ACTION_SCREEN_OFF -> {
                     // Like iOS: the island resets when the screen goes off.
                     state.dismissAlert()
@@ -65,18 +78,67 @@ class SystemEventsMonitor(
             addAction(Intent.ACTION_SCREEN_OFF)
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(ACTION_BT_BATTERY_LEVEL_CHANGED)
+            addAction(ACTION_WIFI_AP_STATE_CHANGED)
         }
         // EXPORTED because the Bluetooth broadcasts come from the Bluetooth stack's process,
         // not system_server. Safe: every action here is a protected broadcast that only the
         // system can send, so other apps can't spoof alerts.
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
         registered = true
+        registerVpnCallback()
     }
 
     fun stop() {
         if (!registered) return
         try { context.unregisterReceiver(receiver) } catch (_: Exception) { }
+        try { connectivity?.unregisterNetworkCallback(vpnCallback) } catch (_: Exception) { }
         registered = false
+    }
+
+    // ---- VPN --------------------------------------------------------------------------------------
+    // A network callback limited to VPN transports: fires only when a VPN comes up or goes down.
+
+    private val connectivity = context.getSystemService(ConnectivityManager::class.java)
+    private val main = Handler(Looper.getMainLooper())
+    private val vpnNetworks = HashSet<Network>()
+    /** Registering reports already-connected VPNs; those aren't "changes". */
+    private var vpnBaselineDone = false
+
+    private val vpnCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            val wasConnected = vpnNetworks.isNotEmpty()
+            vpnNetworks += network
+            if (!wasConnected && vpnBaselineDone) vpnChanged(on = true)
+        }
+
+        override fun onLost(network: Network) {
+            vpnNetworks -= network
+            if (vpnNetworks.isEmpty() && vpnBaselineDone) vpnChanged(on = false)
+        }
+    }
+
+    private fun registerVpnCallback() {
+        val cm = connectivity ?: return
+        vpnNetworks.clear()
+        vpnBaselineDone = false
+        val request = NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_VPN)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_NOT_VPN)
+            .build()
+        try {
+            cm.registerNetworkCallback(request, vpnCallback, main)
+            // Callbacks for existing VPNs are posted right after registering; after that, changes.
+            main.postDelayed({ vpnBaselineDone = true }, 1_000L)
+        } catch (_: Exception) { }
+    }
+
+    private fun vpnChanged(on: Boolean) {
+        val s = settings.value
+        if (s.islandEnabled && s.alertConnectivity) connectivityAlert(IslandActivity.Connectivity.Kind.VPN, on)
+    }
+
+    private fun connectivityAlert(kind: IslandActivity.Connectivity.Kind, on: Boolean) {
+        state.showAlert(IslandActivity.Connectivity(kind, on, SystemClock.uptimeMillis()), IslandStateManager.ALERT_SHORT_MS)
     }
 
     // ---- Battery ----------------------------------------------------------------------------------
@@ -172,5 +234,11 @@ class SystemEventsMonitor(
     private companion object {
         const val ACTION_BT_BATTERY_LEVEL_CHANGED = "android.bluetooth.device.action.BATTERY_LEVEL_CHANGED"
         const val EXTRA_BT_BATTERY_LEVEL = "android.bluetooth.device.extra.BATTERY_LEVEL"
+
+        // Hotspot (WifiManager hidden-but-stable broadcast; Settings and SystemUI use it).
+        const val ACTION_WIFI_AP_STATE_CHANGED = "android.net.wifi.WIFI_AP_STATE_CHANGED"
+        const val EXTRA_WIFI_AP_STATE = "wifi_state"
+        const val WIFI_AP_STATE_DISABLED = 11
+        const val WIFI_AP_STATE_ENABLED = 13
     }
 }

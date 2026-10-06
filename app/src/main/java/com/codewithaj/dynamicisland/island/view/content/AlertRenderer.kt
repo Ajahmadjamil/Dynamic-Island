@@ -58,8 +58,54 @@ class AlertRenderer(private val density: Float) : IslandContentRenderer {
             is IslandActivity.LowBattery -> battery(canvas, layout, a, t, "Low Battery", data.level, RED, animateFill = false)
             is IslandActivity.Ringer -> ringer(canvas, layout, a, t, data.mode)
             is IslandActivity.BluetoothDevice -> bluetooth(canvas, layout, a, t, data)
+            is IslandActivity.Connectivity -> connectivity(canvas, layout, a, t, data)
             else -> Unit
         }
+    }
+
+    // ---- VPN / hotspot ------------------------------------------------------------------------------
+
+    private fun connectivity(c: Canvas, l: RectF, a: Int, t: Float, d: IslandActivity.Connectivity) {
+        val h = l.height()
+        val color = if (d.on) (if (d.kind == IslandActivity.Connectivity.Kind.VPN) BLUE else GREEN) else GREY_TEXT
+        val cx = l.left + h * 0.85f
+        val cy = l.centerY()
+        val s = h * 0.62f
+        // Icon pops in slightly (scale 0.8 → 1).
+        val pop = 0.8f + 0.2f * easeOut(t / 0.35f)
+        c.save()
+        c.scale(pop, pop, cx, cy)
+        if (d.kind == IslandActivity.Connectivity.Kind.VPN) {
+            // "VPN" badge.
+            r.set(cx - s * 0.75f, cy - s * 0.38f, cx + s * 0.75f, cy + s * 0.38f)
+            fill.color = color; fill.alpha = a
+            c.drawRoundRect(r, s * 0.18f, s * 0.18f, fill)
+            text.textSize = s * 0.42f
+            text.textAlign = Paint.Align.CENTER
+            text.color = BLACK; text.alpha = a
+            c.drawText("VPN", cx, cy + text.textSize * 0.36f, text)
+        } else {
+            // Hotspot: a dot with two arcs on each side.
+            fill.color = color; fill.alpha = a
+            c.drawCircle(cx, cy, s * 0.1f, fill)
+            stroke.color = color; stroke.alpha = a; stroke.strokeWidth = s * 0.09f
+            for (k in 1..2) {
+                val rr = s * 0.22f * k
+                r.set(cx - rr, cy - rr, cx + rr, cy + rr)
+                c.drawArc(r, -45f, 90f, false, stroke)
+                c.drawArc(r, 135f, 90f, false, stroke)
+            }
+        }
+        c.restore()
+
+        text.textSize = h * 0.34f
+        text.textAlign = Paint.Align.RIGHT
+        text.color = color; text.alpha = a
+        val label = when (d.kind) {
+            IslandActivity.Connectivity.Kind.VPN -> if (d.on) "Connected" else "Disconnected"
+            IslandActivity.Connectivity.Kind.HOTSPOT -> if (d.on) "Hotspot On" else "Hotspot Off"
+        }
+        c.drawText(label, l.right - h * 0.45f, cy + text.textSize * 0.36f, text)
     }
 
     // ---- Battery ----------------------------------------------------------------------------------
@@ -251,5 +297,8 @@ class AlertRenderer(private val density: Float) : IslandContentRenderer {
         const val RED = 0xFFFF453A.toInt()
         const val ORANGE = 0xFFFF9F0A.toInt()
         const val GREY_BG = 0xFF3A3A3C.toInt()
+        const val GREY_TEXT = 0xFF8E8E93.toInt()
+        const val BLUE = 0xFF0A84FF.toInt()
+        const val BLACK = 0xFF000000.toInt()
     }
 }

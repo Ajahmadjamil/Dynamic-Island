@@ -36,10 +36,11 @@ sealed interface IslandActivity {
     // ---- Live activities ----------------------------------------------------------------------
 
     /** Animation playground content (Home → Animation playground). */
-    data class Demo(val variant: Variant, val startedAtMs: Long) : IslandActivity {
+    data class Demo(val variant: Variant, val startedAtMs: Long, val slot: Int = 0) : IslandActivity {
         enum class Variant { MUSIC, TIMER }
-        override val id get() = "demo"
-        override val priority get() = 0
+        /** slot 1 is a second demo activity, to try the split bubble. */
+        override val id get() = "demo$slot"
+        override val priority get() = if (slot == 0) 1 else 0
         override val contentKey: Any get() = variant
     }
 
@@ -89,6 +90,12 @@ sealed interface IslandActivity {
         override val contentKey: Any get() = "$id@$address@$shownAtMs"
     }
 
+    /** VPN / hotspot switched on or off. */
+    data class Connectivity(val kind: Kind, val on: Boolean, override val shownAtMs: Long) : Alert {
+        enum class Kind { VPN, HOTSPOT }
+        override val id get() = "alert:connectivity"
+    }
+
     data class NotificationPreview(
         val key: String,
         override val packageName: String,
@@ -108,19 +115,106 @@ sealed interface IslandActivity {
         override val contentKey: Any get() = "$id@$key@$shownAtMs"
     }
 
+    // ---- Live activities from other apps' notifications (Phase 5) ------------------------------
+    // ids are "n:<notification key>", so a removed notification removes its activity.
+
+    data class Call(
+        val key: String,
+        override val packageName: String,
+        val caller: String,
+        val avatar: Bitmap?,
+        val incoming: Boolean,
+        /** Wall-clock call start (System.currentTimeMillis), null while not connected. */
+        val startedAtWallMs: Long?,
+        val answer: PendingIntent?,
+        val decline: PendingIntent?,
+        val hangUp: PendingIntent?,
+        val contentIntent: PendingIntent?,
+    ) : IslandActivity {
+        override val id get() = "n:$key"
+        override val priority get() = if (incoming) PRIORITY_CALL_INCOMING else PRIORITY_CALL_ONGOING
+        // Incoming → ongoing is a real content change (buttons → timer), so it cross-fades.
+        override val contentKey: Any get() = "$id@$incoming"
+        override val tapIntent get() = contentIntent
+    }
+
+    data class Timer(
+        val key: String,
+        override val packageName: String,
+        val label: String,
+        val countDown: Boolean,
+        /** Count-down: wall-clock end time. Stopwatch: wall-clock start time. */
+        val chronometerBaseWallMs: Long?,
+        /** Shown instead of a running clock when paused (the app's own text, e.g. "4:12"). */
+        val pausedText: String?,
+        val actions: List<LiveAction>,
+        val contentIntent: PendingIntent?,
+    ) : IslandActivity {
+        val paused get() = chronometerBaseWallMs == null
+        override val id get() = "n:$key"
+        override val priority get() = PRIORITY_TIMER
+        override val tapIntent get() = contentIntent
+    }
+
+    /** Navigation, deliveries, rides, downloads: ongoing notifications with progress / Live Updates. */
+    data class Progress(
+        val key: String,
+        override val packageName: String,
+        val appLabel: String,
+        val title: String,
+        val text: String,
+        /** Live Update chip text (Android 16 "short critical text"), e.g. "5 min", "200 m". */
+        val shortText: String?,
+        val icon: Bitmap?,
+        val progress: Int,
+        val max: Int,
+        val indeterminate: Boolean,
+        val navigation: Boolean,
+        val contentIntent: PendingIntent?,
+    ) : IslandActivity {
+        val fraction get() = if (max > 0) (progress.toFloat() / max).coerceIn(0f, 1f) else -1f
+        override val id get() = "n:$key"
+        override val priority get() = if (navigation) PRIORITY_NAVIGATION else PRIORITY_PROGRESS
+        override val tapIntent get() = contentIntent
+    }
+
     companion object {
-        // Calls > navigation > timers > media > generic, filled in by later phases.
+        // Calls > navigation > timers > media > progress.
+        const val PRIORITY_CALL_INCOMING = 100
+        const val PRIORITY_CALL_ONGOING = 90
+        const val PRIORITY_NAVIGATION = 70
+        const val PRIORITY_TIMER = 60
         const val PRIORITY_MEDIA = 50
+        const val PRIORITY_PROGRESS = 40
     }
 }
+
+/** A button taken from another app's notification (label + its PendingIntent). */
+data class LiveAction(val label: String, val intent: PendingIntent)
 
 data class IslandUiState(
     val activities: List<IslandActivity> = emptyList(),
     val expanded: Boolean = false,
     /** Transient alert; temporarily shown instead of [primary]. */
     val alert: IslandActivity.Alert? = null,
+    /** Set by "swipe sideways" to put a specific activity in the main pill. */
+    val preferredPrimaryId: String? = null,
 ) {
-    val primary: IslandActivity? get() = activities.maxByOrNull { it.priority }
+    val primary: IslandActivity? get() = pick(activities).first
+
+    /**
+     * Picks (main pill, split bubble) from [visible]. An incoming call always wins; otherwise
+     * the user's swipe choice, otherwise priority.
+     */
+    fun pick(visible: List<IslandActivity>): Pair<IslandActivity?, IslandActivity?> {
+        if (visible.isEmpty()) return null to null
+        val urgent = visible.firstOrNull { it is IslandActivity.Call && it.incoming }
+        val main = urgent
+            ?: visible.firstOrNull { it.id == preferredPrimaryId }
+            ?: visible.maxBy { it.priority }
+        val second = visible.filter { it !== main }.maxByOrNull { it.priority }
+        return main to second
+    }
 }
 
 /**
@@ -139,14 +233,37 @@ class IslandStateManager {
 
     fun post(activity: IslandActivity) = _state.update { s ->
         val i = s.activities.indexOfFirst { it.id == activity.id }
+        val previous = if (i >= 0) s.activities[i] else null
         val list = if (i >= 0) s.activities.toMutableList().also { it[i] = activity } else s.activities + activity
-        s.copy(activities = list)
+        // A call that just started ringing opens the island (iOS); the user can still collapse it.
+        val newRing = activity is IslandActivity.Call && activity.incoming &&
+            (previous as? IslandActivity.Call)?.incoming != true
+        // A call that was just answered goes back to compact.
+        val answered = activity is IslandActivity.Call && !activity.incoming &&
+            (previous as? IslandActivity.Call)?.incoming == true
+        s.copy(
+            activities = list,
+            expanded = when {
+                newRing -> true
+                answered -> false
+                else -> s.expanded
+            },
+        )
     }
 
     fun remove(id: String) = _state.update { s ->
         if (s.activities.none { it.id == id }) return@update s
         val left = s.activities.filterNot { it.id == id }
-        s.copy(activities = left, expanded = s.expanded && left.isNotEmpty())
+        s.copy(
+            activities = left,
+            expanded = s.expanded && left.isNotEmpty() && s.primary?.id != id,
+            preferredPrimaryId = s.preferredPrimaryId.takeUnless { it == id },
+        )
+    }
+
+    /** Swipe sideways / tap bubble: the bubble's activity takes the main pill. */
+    fun swap(visibleSecondaryId: String) = _state.update {
+        it.copy(preferredPrimaryId = visibleSecondaryId, expanded = false)
     }
 
     fun expand() = _state.update { if (it.primary != null) it.copy(expanded = true) else it }

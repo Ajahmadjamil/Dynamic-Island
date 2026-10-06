@@ -24,9 +24,15 @@ data class IslandSettings(
 
     // ---- Feature toggles ----
     val showMedia: Boolean = true,
+    val showCalls: Boolean = true,
+    val showTimers: Boolean = true,
+    /** Navigation, deliveries/rides (Android 16 Live Updates) and determinate progress. */
+    val showLiveUpdates: Boolean = true,
     val alertCharging: Boolean = true,
     val alertRinger: Boolean = true,
     val alertBluetooth: Boolean = true,
+    /** VPN connected/disconnected and hotspot on/off. */
+    val alertConnectivity: Boolean = true,
     val notificationPreviews: Boolean = true,
     /**
      * Turn off Android's own heads-up banners while Islet shows previews (needs
