@@ -2,6 +2,7 @@ package com.codewithaj.dynamicisland.util
 
 import android.Manifest
 import android.accessibilityservice.AccessibilityServiceInfo
+import android.app.AppOpsManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -10,6 +11,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.PowerManager
+import android.os.Process
 import android.provider.Settings
 import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationManagerCompat
@@ -25,6 +27,15 @@ data class PermissionStatus(
     val ignoringBatteryOptimizations: Boolean,
     /** "Nearby devices" (BLUETOOTH_CONNECT) on Android 12+; always true below. */
     val bluetooth: Boolean,
+    /** WRITE_SECURE_SETTINGS (adb-granted), needed to replace the system's pop-up banners. */
+    val secureSettings: Boolean,
+    /**
+     * Android 13+ "Allow restricted settings" for side-loaded apps: true = allowed,
+     * false = not allowed, null = not applicable (older Android) or not readable.
+     */
+    val restrictedSettingsAllowed: Boolean?,
+    /** Global heads-up banners setting (Islet turns it off for "Replace system pop-ups"). */
+    val systemHeadsUpEnabled: Boolean,
 ) {
     /** The island can be shown at all. */
     val canShowIsland get() = accessibility || overlay
@@ -39,7 +50,27 @@ object PermissionUtils {
         postNotifications = canPostNotifications(context),
         ignoringBatteryOptimizations = isIgnoringBatteryOptimizations(context),
         bluetooth = hasBluetoothPermission(context),
+        secureSettings = context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
+            PackageManager.PERMISSION_GRANTED,
+        restrictedSettingsAllowed = restrictedSettingsAllowed(context),
+        systemHeadsUpEnabled = Settings.Global.getInt(context.contentResolver, "heads_up_notifications_enabled", 1) != 0,
     )
+
+    /**
+     * Reads our own ACCESS_RESTRICTED_SETTINGS app-op (the "Allow restricted settings" switch).
+     * The op name isn't in the public SDK, so this is best-effort and returns null if the
+     * platform doesn't know it or refuses to answer.
+     */
+    fun restrictedSettingsAllowed(context: Context): Boolean? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
+        val ops = context.getSystemService(AppOpsManager::class.java) ?: return null
+        return try {
+            ops.unsafeCheckOpNoThrow("android:access_restricted_settings", Process.myUid(), context.packageName) ==
+                AppOpsManager.MODE_ALLOWED
+        } catch (_: Exception) {
+            null
+        }
+    }
 
     fun hasBluetoothPermission(context: Context): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||

@@ -12,13 +12,14 @@ import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.codewithaj.dynamicisland.ServiceLocator
+import com.codewithaj.dynamicisland.ui.adb.AdbCommandsScreen
 import com.codewithaj.dynamicisland.ui.apps.AppFilterScreen
 import com.codewithaj.dynamicisland.ui.calibration.CalibrationScreen
 import com.codewithaj.dynamicisland.ui.home.HomeScreen
 import com.codewithaj.dynamicisland.ui.onboarding.OemGuideScreen
 import com.codewithaj.dynamicisland.ui.onboarding.OnboardingScreen
 
-enum class Screen { Home, Onboarding, Calibration, OemGuide, AppFilter }
+enum class Screen { Home, Onboarding, Calibration, OemGuide, AppFilter, Adb }
 
 /**
  * Tiny back-stack navigation. A handful of screens don't justify navigation-compose's footprint.
@@ -46,6 +47,7 @@ fun IsletNavHost() {
                 showBack = stack.size > 1,
                 onBack = back,
                 onOemGuide = { navigate(Screen.OemGuide) },
+                onAdb = { navigate(Screen.Adb) },
                 onFinish = {
                     if (stack.size > 1) back() else { stack.clear(); stack.add(Screen.Home) }
                 },
@@ -53,6 +55,7 @@ fun IsletNavHost() {
             Screen.Calibration -> CalibrationScreen(settings = current, onBack = back)
             Screen.OemGuide -> OemGuideScreen(onBack = back)
             Screen.AppFilter -> AppFilterScreen(settings = current, onBack = back)
+            Screen.Adb -> AdbCommandsScreen(onBack = back)
         }
     }
 }

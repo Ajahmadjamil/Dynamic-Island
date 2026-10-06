@@ -1,7 +1,12 @@
 package com.codewithaj.dynamicisland.ui.home
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Intent
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.ui.text.font.FontFamily
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -11,6 +16,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.codewithaj.dynamicisland.data.AppFilterMode
+import com.codewithaj.dynamicisland.util.AdbCommands
+import androidx.compose.material.icons.outlined.Terminal
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material3.FilledTonalButton
@@ -79,6 +86,15 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
     }
     val status = rememberPermissionStatus().let { if (bluetoothGranted) it.copy(bluetooth = true) else it }
 
+    var showHeadsUpSetup by remember { mutableStateOf(false) }
+    if (showHeadsUpSetup) {
+        HeadsUpSetupDialog(
+            onDismiss = { showHeadsUpSetup = false },
+            // Turn the setting on now; the island process applies it once the permission exists.
+            onDone = { showHeadsUpSetup = false; update { it.copy(replaceSystemHeadsUp = true) } },
+        )
+    }
+
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
         topBar = { IsletTopBar("Islet", scroll) },
@@ -145,6 +161,18 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
                         else "Needs notification access",
                         checked = settings.notificationPreviews,
                     ) { v -> update { it.copy(notificationPreviews = v) } }
+                    SwitchRow(
+                        "Replace system pop-ups",
+                        subtitle = when {
+                            !status.secureSettings -> "Hide Android's own banners so only the island shows. Needs a one-time setup from a computer."
+                            else -> "Android's pop-up banners are off while Islet shows previews. Blocked apps won't pop up at all; everything still goes to the shade."
+                        },
+                        checked = settings.replaceSystemHeadsUp && status.secureSettings,
+                        enabled = settings.notificationPreviews,
+                    ) { v ->
+                        if (v && !status.secureSettings) showHeadsUpSetup = true
+                        else update { it.copy(replaceSystemHeadsUp = v) }
+                    }
                     NavRow(
                         Icons.Outlined.Apps,
                         "Choose apps",
@@ -180,10 +208,65 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
                 GroupCard {
                     NavRow(Icons.Outlined.Straighten, "Calibrate island", "Position and size over your camera") { navigate(Screen.Calibration) }
                     NavRow(Icons.Outlined.Security, "Permissions & setup", "Accessibility, notifications, battery") { navigate(Screen.Onboarding) }
+                    val adbItems = AdbCommands.items(context, status)
+                    val requiredMissing = adbItems.count { it.level == AdbCommands.Level.REQUIRED && !it.done }
+                    val anyMissing = adbItems.count { !it.done && it.level != AdbCommands.Level.RECOVERY }
+                    NavRow(
+                        Icons.Outlined.Terminal,
+                        "ADB commands",
+                        when {
+                            requiredMissing > 0 -> "$requiredMissing required step(s) missing"
+                            anyMissing > 0 -> "Required done · $anyMissing optional left"
+                            else -> "Everything is set up"
+                        },
+                    ) { navigate(Screen.Adb) }
                 }
             }
         }
     }
+}
+
+/**
+ * WRITE_SECURE_SETTINGS can't be requested at runtime; only adb can grant it. We show the
+ * exact command, and how to undo everything.
+ */
+@Composable
+private fun HeadsUpSetupDialog(onDismiss: () -> Unit, onDone: () -> Unit) {
+    val context = LocalContext.current
+    val command = "adb shell pm grant ${context.packageName} android.permission.WRITE_SECURE_SETTINGS"
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("One-time setup") },
+        text = {
+            Column {
+                Text(
+                    "Android doesn't let apps turn off another app's pop-ups. Islet can switch off the " +
+                        "system's pop-up banners instead (and switches them back on whenever previews or " +
+                        "the island are off), but it needs a permission only a computer can grant.\n\n" +
+                        "1. Connect your phone with USB debugging on.\n2. Run:",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+                Text(
+                    command,
+                    style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
+                    modifier = Modifier.padding(vertical = 10.dp),
+                )
+                Text(
+                    "If you ever uninstall Islet while this is on, run:\n" +
+                        "adb shell settings put global heads_up_notifications_enabled 1",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        },
+        confirmButton = { TextButton(onClick = onDone) { Text("Done, turn it on") } },
+        dismissButton = {
+            TextButton(onClick = {
+                context.getSystemService(ClipboardManager::class.java)
+                    ?.setPrimaryClip(ClipData.newPlainText("adb command", command))
+            }) { Text("Copy command") }
+        },
+    )
 }
 
 /**
