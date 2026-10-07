@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Themed-icon layer (Android 13+): a single-colour silhouette the system tints to the user's
+    palette. Pill with equaliser cut-outs + the split bubble as a ring.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54" android:pivotY="54"
+        android:scaleX="0.96" android:scaleY="0.96">
+        <!-- Pill, with the art dot and three bars punched out (even-odd). -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M29,45 H57 A9,9 0 0 1 57,63 H29 A9,9 0 0 1 29,45 Z
+                M25.5,54 A4.5,4.5 0 1 0 34.5,54 A4.5,4.5 0 1 0 25.5,54 Z
+                M44,51 H46.2 V57 H44 Z
+                M48,49 H50.2 V59 H48 Z
+                M52,50.5 H54.2 V57.5 H52 Z" />
+        <!-- Bubble as a ring. -->
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M70,54 A9,9 0 1 0 88,54 A9,9 0 1 0 70,54 Z
+                M74.5,54 A4.5,4.5 0 1 0 83.5,54 A4.5,4.5 0 1 0 74.5,54 Z" />
+    </group>
+</vector>

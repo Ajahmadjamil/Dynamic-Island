@@ -1,0 +1,41 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="144" height="144" viewBox="18 18 72 72" role="img" aria-label="Pixel Island logo">
+  <!-- Same artwork as the adaptive launcher icon (res/drawable/ic_launcher_*.xml), circle-masked. -->
+  <defs>
+    <clipPath id="mask"><circle cx="54" cy="54" r="36"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="108" y2="108" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1A2150"/><stop offset=".55" stop-color="#2D1670"/><stop offset="1" stop-color="#0C0F24"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="54" cy="54" r="40" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6F8BFF" stop-opacity=".5"/><stop offset=".6" stop-color="#6F8BFF" stop-opacity=".15"/><stop offset="1" stop-color="#6F8BFF" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="warm" cx="96" cy="100" r="46" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF4F8B" stop-opacity=".25"/><stop offset="1" stop-color="#FF4F8B" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="rim" x1="0" y1="45" x2="0" y2="63" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity=".4"/><stop offset=".6" stop-color="#fff" stop-opacity=".05"/><stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="art" x1="25" y1="49" x2="35" y2="59" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF375F"/><stop offset="1" stop-color="#FF9F0A"/>
+    </linearGradient>
+    <linearGradient id="eq" x1="0" y1="49" x2="0" y2="59" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#64D2FF"/><stop offset="1" stop-color="#30D158"/>
+    </linearGradient>
+  </defs>
+  <g clip-path="url(#mask)">
+    <rect width="108" height="108" fill="url(#bg)"/>
+    <rect width="108" height="108" fill="url(#glow)"/>
+    <rect width="108" height="108" fill="url(#warm)"/>
+    <g transform="translate(54 54) scale(.96) translate(-54 -54)">
+      <path fill="#000" fill-opacity=".25" d="M29,47 H57 A9,9 0 0 1 57,65 H29 A9,9 0 0 1 29,47 Z"/>
+      <path fill="#000" fill-opacity=".25" d="M70,56 A9,9 0 1 0 88,56 A9,9 0 1 0 70,56 Z"/>
+      <path fill="#000" d="M29,45 H57 A9,9 0 0 1 57,63 H29 A9,9 0 0 1 29,45 Z"/>
+      <path fill="none" stroke="url(#rim)" stroke-width=".8" d="M29,45.4 H57 A8.6,8.6 0 0 1 57,62.6 H29 A8.6,8.6 0 0 1 29,45.4 Z"/>
+      <path fill="url(#art)" d="M25,54 A5,5 0 1 0 35,54 A5,5 0 1 0 25,54 Z"/>
+      <path fill="none" stroke="url(#eq)" stroke-width="2.4" stroke-linecap="round" d="M45,51.5 V56.5 M49,49.5 V58.5 M53,50.5 V57.5 M57,52 V56"/>
+      <path fill="#000" d="M70,54 A9,9 0 1 0 88,54 A9,9 0 1 0 70,54 Z"/>
+      <path fill="none" stroke="url(#rim)" stroke-width=".8" d="M70.4,54 A8.6,8.6 0 1 0 87.6,54 A8.6,8.6 0 1 0 70.4,54 Z"/>
+      <path fill="none" stroke="#FF9F0A" stroke-opacity=".3" stroke-width="1.8" d="M74.4,54 A4.6,4.6 0 1 0 83.6,54 A4.6,4.6 0 1 0 74.4,54"/>
+      <path fill="none" stroke="#FF9F0A" stroke-width="1.8" stroke-linecap="round" d="M79,49.4 A4.6,4.6 0 1 1 74.4,54"/>
+    </g>
+  </g>
+</svg>

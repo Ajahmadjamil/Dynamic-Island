@@ -15,13 +15,6 @@
     <!-- Bluetooth device alerts: name + battery of connected headphones/watches. -->
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <!--
-        Optional, granted by the user via adb only: lets "Replace system pop-ups" switch off
-        Android's heads-up banners while Islet shows previews (see HeadsUpSuppressor).
-    -->
-    <uses-permission
-        android:name="android.permission.WRITE_SECURE_SETTINGS"
-        tools:ignore="ProtectedPermissions" />
 
     <!--
         Package visibility (Android 11+): enough to list launchable apps in the per-app filter

@@ -12,4 +12,4 @@
     android:description="@string/accessibility_service_description"
     android:isAccessibilityTool="false"
     android:notificationTimeout="150"
-    android:settingsActivity="com.codewithaj.dynamicisland.ui.MainActivity" />
+    android:settingsActivity="com.codewithaj.pixelisland.ui.MainActivity" />
