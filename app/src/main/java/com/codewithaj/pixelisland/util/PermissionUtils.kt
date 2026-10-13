@@ -29,7 +29,8 @@ data class PermissionStatus(
     val bluetooth: Boolean,
     /**
      * Android 13+ "Allow restricted settings" for side-loaded apps: true = allowed,
-     * false = not allowed, null = not applicable (older Android) or not readable.
+     * false = blocked, null = not applicable (older Android), not readable, or left to Android to
+     * decide from the install source.
      */
     val restrictedSettingsAllowed: Boolean?,
 ) {
@@ -51,8 +52,12 @@ object PermissionUtils {
 
     /**
      * Reads our own ACCESS_RESTRICTED_SETTINGS app-op (the "Allow restricted settings" switch).
-     * The op name isn't in the public SDK, so this is best-effort and returns null if the
-     * platform doesn't know it or refuses to answer.
+     * The op name isn't in the public SDK, so this is best-effort.
+     *
+     * - allowed → true (the user tapped "Allow restricted settings")
+     * - errored / ignored → false (blocked; "ignored" = blocked and the warning was already seen)
+     * - default → null: Android decides from the install source, which we can't see from here.
+     *   A Pixel 8 on Android 17 reported "default" with Accessibility already on (2026-10-13).
      */
     fun restrictedSettingsAllowed(context: Context): Boolean? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return null
@@ -60,8 +65,11 @@ object PermissionUtils {
         return try {
             // Deprecated in newer SDKs but still the simplest read-only check of our own op.
             @Suppress("DEPRECATION")
-            ops.unsafeCheckOpNoThrow("android:access_restricted_settings", Process.myUid(), context.packageName) ==
-                AppOpsManager.MODE_ALLOWED
+            when (ops.unsafeCheckOpNoThrow("android:access_restricted_settings", Process.myUid(), context.packageName)) {
+                AppOpsManager.MODE_ALLOWED -> true
+                AppOpsManager.MODE_ERRORED, AppOpsManager.MODE_IGNORED -> false
+                else -> null
+            }
         } catch (_: Exception) {
             null
         }

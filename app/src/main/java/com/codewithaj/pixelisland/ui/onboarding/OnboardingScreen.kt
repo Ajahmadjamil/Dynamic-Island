@@ -57,7 +57,7 @@ fun OnboardingScreen(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scroll.nestedScrollConnection),
-        topBar = { IsletTopBar("Set up Pixel Island", scroll, onBack = if (showBack) onBack else null) },
+        topBar = { IsletTopBar("All permissions", scroll, onBack = if (showBack) onBack else null) },
         bottomBar = {
             Button(
                 onClick = {

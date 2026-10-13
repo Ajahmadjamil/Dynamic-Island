@@ -48,6 +48,7 @@ object AdbCommands {
                 done = effectivelyOk,
                 statusText = when {
                     s.restrictedSettingsAllowed == true -> "Allowed"
+                    effectivelyOk && s.restrictedSettingsAllowed == null -> "Not blocking right now"
                     effectivelyOk -> "Not allowed, but not blocking right now"
                     s.restrictedSettingsAllowed == null -> "Unknown — run it to be safe"
                     else -> "Not allowed"

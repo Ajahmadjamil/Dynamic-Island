@@ -34,6 +34,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.Security
 import androidx.compose.material.icons.outlined.Straighten
 import androidx.compose.material3.Card
@@ -95,7 +96,7 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = padding.calculateTopPadding(), bottom = padding.calculateBottomPadding() + 24.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            item { StatusCard(settings, status, onFix = { navigate(Screen.Onboarding) }) }
+            item { StatusCard(settings, status, onFix = { navigate(Screen.Setup) }) }
 
             item { SectionTitle("Island") }
             item {
@@ -223,7 +224,8 @@ fun HomeScreen(settings: IslandSettings, navigate: (Screen) -> Unit) {
             item {
                 GroupCard {
                     NavRow(Icons.Outlined.Straighten, "Calibrate island", "Position and size over your camera") { navigate(Screen.Calibration) }
-                    NavRow(Icons.Outlined.Security, "Permissions & setup", "Accessibility, notifications, battery") { navigate(Screen.Onboarding) }
+                    NavRow(Icons.Outlined.AutoAwesome, "Guided setup", "Step by step, with animated how-tos") { navigate(Screen.Setup) }
+                    NavRow(Icons.Outlined.Security, "All permissions", "See and change each permission") { navigate(Screen.Onboarding) }
                     val adbItems = AdbCommands.items(context, status)
                     val requiredMissing = adbItems.count { it.level == AdbCommands.Level.REQUIRED && !it.done }
                     NavRow(

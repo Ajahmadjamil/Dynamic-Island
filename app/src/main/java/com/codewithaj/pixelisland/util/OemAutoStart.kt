@@ -12,7 +12,10 @@ import android.os.Build
  */
 object OemAutoStart {
 
-    data class Guide(val brand: String, val steps: List<String>, val intents: List<Intent>)
+    data class Guide(val brand: String, val steps: List<String>, val intents: List<Intent>) {
+        /** A known aggressive brand with its own settings screens (not just the App info fallback). */
+        val hasBrandSteps: Boolean get() = intents.size > 1
+    }
 
     fun guideFor(context: Context): Guide {
         val m = Build.MANUFACTURER.lowercase()
